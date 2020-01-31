@@ -8,13 +8,132 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#define BACKLOG 10
+#include <ctype.h>
+#include <time.h>
 
-void sighand()
+#define BACKLOG 10
+const char* slash = "/";
+const char* endphrase = "HTTP/1.1";
+
+char* get_fn(char* buf)
 {
-	while(waitpid(-1,NULL,WNOHANG) >0) //wait until child process terminates
+	char* file_name;
+	if(buf == NULL)
+	{
+		perror("empty buffer");
+		exit(1);
+	}
+
+	char* begin = strstr(buf, slash);
+
+	char* cutoff = strstr(buf, endphrase);
+	int len = cutoff - begin -2;
+	file_name = (char*)malloc((len)*sizeof(char));
+	strncpy(file_name, begin+1, len);
+
+	int spaceCount = 0;
+	for(int i = 0; i < len; i++)
+	{
+		file_name[i] = tolower(file_name[i]);
+	}
+
+	//printf("filename: %s\n",file_name);
+	return file_name;
 }
 
+void req(int fd)
+{
+	char* file_name;
+	char* file_type;
+	char buf[1023];
+	char resp[256];
+	memset(buf,0,sizeof(buf));
+	//read
+	if(read(fd, buf, sizeof(buf)) == -1)
+	{
+		perror("error reading");
+		close(fd);
+		exit(1);
+	}
+
+	
+	printf("HTTP Message: \n%s\n", buf);
+	if(strlen(buf) == 0)
+		return;
+	//parse request
+	file_name = get_fn(buf);
+	if(strstr(file_name, ".jpg") != NULL)
+		file_type = "image/jpeg";
+	else if(strstr(file_name, ".jpeg") != NULL)
+		file_type = "image/jpeg";
+	else if(strstr(file_name, ".png") != NULL)
+		file_type = "image/png";
+	else if(strstr(file_name, ".gif") != NULL)
+		file_type = "image/gif";
+	else if(strstr(file_name, ".html") != NULL)
+		file_type = "text/html";
+	else if(strstr(file_name, ".htm") != NULL)
+		file_type = "text/html";
+	else if(strstr(file_name, ".txt") != NULL)
+		file_type = "text/plain";
+	else
+		file_type = "application/octet-stream";
+	//printf("%s\n", file_type);
+
+	FILE *fp = fopen(file_name,"r");
+	if(fp == NULL)
+	{
+		//file not found 
+		char* error_header = "HTTP/1.1 404 Not Found \r\n";
+		write(fd, error_header, strlen(error_header));
+
+		//date
+		time_t now;
+		time(&now);
+		sprintf(resp, "Date: %s\r\n\r\n", ctime(&now));
+		write(fd, resp, strlen(resp));
+
+
+
+	}
+	else
+	{
+		
+		char* succ_header = "HTTP/1.1 200 OK\r\n";
+		write(fd, succ_header, strlen(succ_header));
+		printf("%s\n", succ_header);
+		//file size
+		fseek(fp, 0L, SEEK_END);
+		int size = (int) ftell(fp);
+		fseek(fp, 0L, SEEK_SET);
+		sprintf(resp,"Content-Length: %i\r\n", size);
+		write(fd, resp, strlen(resp));
+
+		//date
+		// time_t now;
+		// time(&now);
+		// sprintf(resp, "Date: %s\r\n", ctime(&now));
+		// write(fd, resp, strlen(resp));
+
+		sprintf(resp, "Content-Type: %s\n\n", file_type);
+		write(fd, resp, strlen(resp));
+
+		if(ferror(fp))
+		{
+			printf("yikes\n");
+		}
+
+		char* fbuf = malloc(sizeof(char)* size);
+		fread(fbuf,1, size, fp);
+		write(fd, fbuf, size);
+		fclose(fp);
+		free(fbuf);
+	}
+
+
+
+	free(file_name);
+}
 
 int main(int argc, char *argv[])
 {
@@ -24,8 +143,14 @@ int main(int argc, char *argv[])
 	struct sockaddr_in cli_addr; //socket address client
 	socklen_t sin_size;
 	struct sigaction sigact; //for client process
-	pid_t pid; //process id
 
+	//get port number argument
+	portno = atoi(argv[1]);
+	if(portno >= 0 && portno <= 1023)
+	{
+		perror("invalid portno");
+		exit(1);
+	}
 
 	//create socket
 	if((sock_fd = socket(AF_INET,SOCK_STREAM,0)) == -1)
@@ -37,8 +162,6 @@ int main(int argc, char *argv[])
 	//clear server address
 	memset((char*) &srv_addr, 0, sizeof(srv_addr));
 
-	//get port number argument
-	portno = atoi(argv[1]);
 
 	//set address info
 	srv_addr.sin_family = AF_INET;;
@@ -59,20 +182,10 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	//preprae for child process
-	sigact.sa_handler = sighand;
-	sigemptyset(&sa.sa_mask);
-	sigact.sa_flags = SA_RESTART;
-	if(sigaction(SIGCHLD,&sigact, NULL) == -1)
-	{
-		perror("error in setting up child proc");
-		exit(1);
-	}
-
 	while(1) //main accept() loop
 	{
 		sin_size = sizeof(struct sockaddr_in);
-		new_fd = accept(sock_fd,(struct sockaddr*) &cli_addr, &sin_size)
+		new_fd = accept(sock_fd,(struct sockaddr*) &cli_addr, &sin_size);
 
 		if(new_fd == -1)
 		{
@@ -80,25 +193,11 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 
-		pid = fork()
-
-		if(pid == -1)
-		{
-			perror("failure fork");
-			exit(1);
-		}
-
-		if(pid == 0) //child process
-		{
-			close(sock_fd);
-			do_something(); 
-			exit(0);
-		}
-		else //parent process
-		{
-			printf("server: got connection from %s\n", inet_ntoa(cli_addr.sin_addr));
-			close(new_fd);
-		}
+		req(new_fd);
+		printf("server: got connection from %s\n", inet_ntoa(cli_addr.sin_addr));
+		close(new_fd);
+		
 	}
   	return 0;
 }
+
