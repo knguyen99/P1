@@ -15,6 +15,28 @@
 const char* slash = "/";
 const char* endphrase = "HTTP/1.1";
 
+char* fixSpaces(char* old_name)
+{
+	char new_name[512] = {0};
+	char* loc = &new_name[0];
+	const char* tmp = old_name;
+	while(1)
+	{
+		const char* p = strstr(tmp, "%20");
+		if(p == NULL)
+		{
+			strcpy (loc, tmp);
+			break;
+		}
+		memcpy(loc, tmp, p-tmp);
+		loc += p-tmp;
+		memcpy(loc, " ", 1);
+		loc ++;
+		tmp = p+3;
+	}
+	strcpy(old_name,new_name);
+}
+
 char* get_fn(char* buf)
 {
 	char* file_name;
@@ -25,7 +47,6 @@ char* get_fn(char* buf)
 	}
 
 	char* begin = strstr(buf, slash);
-
 	char* cutoff = strstr(buf, endphrase);
 	int len = cutoff - begin -2;
 	file_name = (char*)malloc((len)*sizeof(char));
@@ -36,8 +57,7 @@ char* get_fn(char* buf)
 	{
 		file_name[i] = tolower(file_name[i]);
 	}
-
-	//printf("filename: %s\n",file_name);
+	file_name = fixSpaces(file_name);
 	return file_name;
 }
 
@@ -77,7 +97,7 @@ void req(int fd)
 	else if(strstr(file_name, ".txt") != NULL)
 		file_type = "text/plain";
 	else
-		file_type = "application/octet-stream";
+		file_type = "application/x-binary";
 	//printf("%s\n", file_type);
 
 	FILE *fp = fopen(file_name,"r");
@@ -110,10 +130,10 @@ void req(int fd)
 		write(fd, resp, strlen(resp));
 
 		//date
-		// time_t now;
-		// time(&now);
-		// sprintf(resp, "Date: %s\r\n", ctime(&now));
-		// write(fd, resp, strlen(resp));
+		time_t now;
+		time(&now);
+		sprintf(resp, "Date: %s\r", ctime(&now));
+		write(fd, resp, strlen(resp));
 
 		sprintf(resp, "Content-Type: %s\n\n", file_type);
 		write(fd, resp, strlen(resp));
