@@ -164,7 +164,8 @@ int main(int argc, char *argv[])
 	struct sigaction sigact; //for client process
 
 	//get port number argument
-	portno = atoi(argv[1]);
+	if(argc == 2)
+		portno = atoi(argv[1]);
 	if(portno >= 0 && portno <= 1023)
 	{
 		perror("invalid portno");
