@@ -120,7 +120,7 @@ void req(int fd)
 		
 		char* succ_header = "HTTP/1.1 200 OK\r\n";
 		write(fd, succ_header, strlen(succ_header));
-		printf("%s\n", succ_header);
+		//printf("%s\n", succ_header);
 		//file size
 		fseek(fp, 0L, SEEK_END);
 		int size = (int) ftell(fp);
