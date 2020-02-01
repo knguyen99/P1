@@ -15,7 +15,7 @@
 const char* slash = "/";
 const char* endphrase = "HTTP/1.1";
 
-char* fixSpaces(char* old_name)
+void fixSpaces(char* old_name)
 {
 	char new_name[512] = {0};
 	char* loc = &new_name[0];
@@ -52,7 +52,6 @@ char* get_fn(char* buf)
 	file_name = (char*)malloc((len)*sizeof(char));
 	strncpy(file_name, begin+1, len);
 
-	int spaceCount = 0;
 	for(int i = 0; i < len; i++)
 	{
 		file_name[i] = tolower(file_name[i]);
