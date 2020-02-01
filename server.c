@@ -15,7 +15,7 @@
 const char* slash = "/";
 const char* endphrase = "HTTP/1.1";
 
-void fixSpaces(char* old_name)
+char* fixSpaces(char* old_name)
 {
 	char new_name[512] = {0};
 	char* loc = &new_name[0];
@@ -35,6 +35,7 @@ void fixSpaces(char* old_name)
 		tmp = p+3;
 	}
 	strcpy(old_name,new_name);
+	return old_name;
 }
 
 char* get_fn(char* buf)
